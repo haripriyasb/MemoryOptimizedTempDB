@@ -1,0 +1,148 @@
+/*
+Create log table to save details of sessions. 
+*/
+USE [DBATest]
+GO
+
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[XTP_Log](
+	[KillTime] [datetime] NOT NULL default getdate(),
+	[SessionId] [int] NOT NULL,
+	[KillCommand] [nvarchar](100) NULL,
+	[Comment] [nvarchar](200) NULL,
+	[ProgramName] [nvarchar](128) NULL,
+	[loginname] [nvarchar](128) NULL,
+	[tran_elapsed_time_hours] [int] NULL
+) ON [PRIMARY]
+GO
+
+
+/*
+DO NOT RUN ON PRODUCTION.
+TEST BEFORE RUNNING.
+
+Schedule a job to run this stored procedure every 30 minutes (or at a frequency appropriate for your environment).
+
+The procedure performs the following actions:
+
+1. Checks if XTP memory usage exceeds 10% of max server memory.
+2. And verifies if a transaction has been idle for more than 5 hours.
+3. Kills the SPID that has been idle the longest.
+
+This helps release memory. If there are multiple idle SPIDs preventing cleanup, the stored procedure will terminate the next longest idle SPID in the following iteration.
+
+*/
+
+USE [DBATest]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER  PROCEDURE [dbo].[usp_KillIdleXTPTransactions]
+    @MemoryThresholdPercent FLOAT = 10.0,    -- 10% of max server memory as threshold
+    @IdleTransactionHours INT = 5  ,         -- default is 5 hours
+ @ThresholdGB INT = 0 
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+
+IF @ThresholdGB = 0
+BEGIN
+--Get max server memory 
+ DECLARE @MaxMemoryMB INT;
+    SELECT @MaxMemoryMB = CONVERT(INT, value_in_use)
+    FROM sys.configurations
+    WHERE name = 'max server memory (MB)';
+
+    SET @ThresholdGB = @MaxMemoryMB * @MemoryThresholdPercent * 0.01 * 0.001; --6% divided by 100, and convert to GB
+END
+
+    IF EXISTS (
+        SELECT 1
+        FROM sys.dm_os_memory_clerks WITH (NOLOCK)
+        WHERE type = 'MEMORYCLERK_XTP'
+        GROUP BY type
+        HAVING SUM(pages_kb) / 1024.0 / 1024.0 > @ThresholdGB
+    )
+    BEGIN
+        IF OBJECT_ID('tempdb..#LongRunningSessions') IS NOT NULL
+            DROP TABLE #LongRunningSessions;
+
+        -- Store session_id and program_name in temp table where transactions are open for more than 5 hours
+        SELECT 
+            st.session_id,
+            sess.program_name, sess.login_name, DATEDIFF(HOUR, transaction_begin_time, GETDATE()) as tran_elapsed_time_hours
+        INTO #LongRunningSessions
+        FROM sys.dm_tran_active_transactions at
+        INNER JOIN sys.dm_tran_session_transactions st ON st.transaction_id = at.transaction_id
+        LEFT OUTER JOIN sys.dm_exec_sessions sess ON st.session_id = sess.session_id
+        LEFT OUTER JOIN sys.dm_exec_connections conn ON conn.session_id = sess.session_id
+        OUTER APPLY sys.dm_exec_sql_text(conn.most_recent_sql_handle) AS txt
+        WHERE DATEDIFF(HOUR, at.transaction_begin_time, GETDATE()) > @IdleTransactionHours --5 hours
+        AND program_name <> '' --Add filters as needed
+        AND login_name <> '';  --Add filters as needed
+
+        DECLARE @SessionId INT;
+        DECLARE @ProgramName NVARCHAR(128);
+	DECLARE @LoginName NVARCHAR(128);
+        DECLARE @KillStatement NVARCHAR(100);
+	DECLARE @tran_elapsed_time_hours INT;
+        DECLARE @EmailSubject NVARCHAR(255);
+        DECLARE @EmailBody NVARCHAR(MAX);
+
+        DECLARE session_cursor CURSOR FOR
+        SELECT top 1 session_id, program_name,login_name,tran_elapsed_time_hours FROM #LongRunningSessions order by tran_elapsed_time_hours desc;
+
+        OPEN session_cursor;
+        FETCH NEXT FROM session_cursor INTO @SessionId, @ProgramName, @LoginName,@tran_elapsed_time_hours;
+
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            SET @KillStatement = 'KILL ' + CAST(@SessionId AS VARCHAR(10));
+
+
+             --EXEC (@KillStatement); --Kill sessions
+
+            -- Log kill session and program to table
+            INSERT INTO DBATest.dbo.XTP_Log (SessionId, KillCommand, ProgramName, Comment,LoginName,tran_elapsed_time_hours)
+            VALUES (@SessionId, @KillStatement, @ProgramName, 'Idle XTP transaction > threshold',@LoginName,@tran_elapsed_time_hours);
+
+            PRINT @KillStatement; 
+         
+           -- Prepare and send email
+            SET @EmailSubject = 'XTP Idle Session on ' + @@SERVERNAME;
+            SET @EmailBody = 
+                'Session ID: ' + CAST(@SessionId AS NVARCHAR(10)) + CHAR(13) +
+                'Login Name: ' + @LoginName + CHAR(13) +
+                'Program Name: ' + @ProgramName + CHAR(13) +
+                'Idle Duration (hours): ' + CAST(@tran_elapsed_time_hours AS NVARCHAR(10)) + CHAR(13) +
+                'Kill Command: ' + @KillStatement;
+
+            EXEC msdb.dbo.sp_send_dbmail
+                @profile_name = 'YourMailProfileName',  -- Change this to your Database Mail profile
+                @recipients = 'your_email@domain.com',  -- Change this to actual recipient
+                @subject = @EmailSubject,
+                @body = @EmailBody;
+
+            FETCH NEXT FROM session_cursor INTO @SessionId, @ProgramName,@LoginName,@tran_elapsed_time_hours;
+        END;
+
+        CLOSE session_cursor;
+        DEALLOCATE session_cursor;
+
+  -- Step 4: Execute garbage collection 
+    EXEC sys.sp_xtp_force_gc 'tempdb';
+    EXEC sys.sp_xtp_force_gc 'tempdb';
+    EXEC sys.sp_xtp_force_gc;
+    EXEC sys.sp_xtp_force_gc;
+
+    END
+END;
