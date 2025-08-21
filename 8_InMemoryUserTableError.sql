@@ -16,6 +16,15 @@ CREATE TABLE dbo.MemoryOptimizedTable
 WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_AND_DATA);
 GO
 
+
+
+
+
+
+
+
+
+
 -- Create an In-memory OLTP transaction that accesses a system view in tempdb
 
 BEGIN TRAN;
@@ -29,6 +38,15 @@ INSERT INTO DBATest.dbo.MemoryOptimizedTable
 VALUES (1);
 
 COMMIT TRAN;
+
+
+
+
+
+
+
+
+
 
 
 /*

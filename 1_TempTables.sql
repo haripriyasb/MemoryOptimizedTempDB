@@ -1,3 +1,6 @@
+
+
+
 /*SQL VERSION*/
 SELECT @@VERSION AS 'SQL VERSION'
 
@@ -9,12 +12,38 @@ SELECT
     total_physical_memory_kb / 1024 / 1024 AS Total_Physical_Memory_GB 
 FROM sys.dm_os_sys_memory;
 
+/*VERIFY MEMORY-OPTIMIZED TEMPDB METADATA FEATURE*/
+/*DISABLED BY DEFAULT*/
+SELECT SERVERPROPERTY('IsTempDBMetadataMemoryOptimized') AS IsTempDBMetadataMemoryOptimized; 
+GO
+
+
+
+
+
+
+
+
+
+
 /* CREATE 2 STORED PROCEDURES - ONE WITH TEMP TABLE AND OTHER ONE WITH TABLE VARIABLE.
+
 RUN STORED PROCEDURE WITHOUT FEATURE, NOTE DOWN TIME TAKEN, ENABLE FEATURE, RUN SP AND NOTE DOWN TIME TAKEN. 
+
 IS THERE A REDUCTION IN EXECUTION TIME? IS CONTENTION REDUCED?
+
 THIS IS NOT A COMPARISON BETWEEN TEMP TABLE AND TABLE VARIABLE.
+
 THIS IS TO CHECK IF THE FEATURE HELPS EITHER STORED PROCEDURES.
 */
+
+
+
+
+
+
+
+
 
 /*SP WITH TEMP TABLE */
 USE DBATEST
@@ -38,6 +67,15 @@ SET @i += 1
 END
 END
 GO
+
+
+
+
+
+
+
+
+
 
 --SP WITH TABLE VARIABLE
 USE DBATEST
@@ -63,12 +101,57 @@ BEGIN
 END;
 
 
+
+
+
+
+
+
+
 /*
 
 STRESS TEST SQLSERVER USING OSTRESS - FREE MS TOOL TO TROUBLESHOOT SQL SERVER
   UNDER HEAVY LOAD
   
 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* REVIEW CONTENTION SCRIPT */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
 
@@ -80,20 +163,29 @@ ostress.exe -S"HARIPRIYA\SQL2022" -Q"exec dbatest.dbo.PopulateTempTable" -n50 -r
 */
 
 /*
-Temp Tables Execution Time - without Feature: 26  secs
-Temp Tables Execution Time - with Feature: 10  secs
+Temp Tables Execution Time - without Feature:   secs
+Temp Tables Execution Time - with Feature:  secs
 
 */
 
 
+
+
+
+
+
+
+
+
 /* NOW RUN THE STORED PROCEDURE WITH TABLE VARIABLE TO SEE THE DIFFERENCE IN EXECUTION TIME.
 RUN 50 SIMULTANEOUS CONNECTIONS AND RUN THE QUERY 1000 TIMES ON EACH CONNECTION
+
 ostress.exe -S"HARIPRIYA\SQL2022" -Q"exec dbatest.dbo.PopulateTableVariable" -n50 -r1000 -q
 
 */
 
 /*
-Table Variable Execution Time - without Feature: 8  secs
-Table Variable Execution Time - with Feature: 8 secs
+Table Variable Execution Time - without Feature:   secs
+Table Variable Execution Time - with Feature:  secs
 
 */

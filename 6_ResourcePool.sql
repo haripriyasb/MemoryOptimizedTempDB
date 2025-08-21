@@ -1,6 +1,29 @@
+
+
 /*
 RESOURCE POOL 
 */
+
+/* Enable Resource Governor */
+
+ALTER RESOURCE GOVERNOR RECONFIGURE;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 USE [master]
 GO
@@ -10,7 +33,7 @@ ALTER RESOURCE POOL [TempDBRPool]
        (min_cpu_percent=10, 
 		max_cpu_percent=100, 
 		min_memory_percent=1, 
-		max_memory_percent=2, --for demo purpose, actual servers - set it to 70 or 80%
+		max_memory_percent=2, --600MB, for demo purpose, actual servers - set it to 70 or 80%
 		cap_cpu_percent=100, 
 		AFFINITY SCHEDULER = AUTO
 , 
@@ -21,12 +44,32 @@ GO
 
 ALTER RESOURCE GOVERNOR RECONFIGURE;
 
+
+
+
+
+
+
+
+
+
+
 --Bind Resource Pool to TempDB
 
 ALTER SERVER CONFIGURATION 
 SET MEMORY_OPTIMIZED TEMPDB_METADATA = ON (RESOURCE_POOL = 'TempDBRPool');
 
 --Needs Restart of SQL Service to take effect, yes even if feature is enabled
+
+
+
+
+
+
+
+
+
+
 
 
 --Verify binding to TempDB
@@ -37,6 +80,16 @@ on d.resource_pool_id = p.pool_id
 where database_id = 2
 
 
+
+
+
+
+
+
+
+
+
+
 /*MEMORY OCCUPIED BY TEMPDB SYSTEM TABLES*/
 SELECT type
 	,name
@@ -45,15 +98,46 @@ FROM sys.dm_os_memory_clerks
 WHERE name = 'DB_ID_2' --TempDB
 
 
---DEMO FOR OUT OF MEMORY ERRORS
+
+
+
+
+
+
+
+
+
+
+/* DEMO FOR OUT OF MEMORY ERRORS
+max memory is 2% of 32GB, once XTP memory reaches around 600MB, it displays out of memory errors 
+*/
 
 BEGIN TRAN
     CREATE TABLE #hold(id int)
+
+--ROLLBACK
+
+
+
+
+
+
+
+
 
 
 /*
 ostress.exe -S"HARIPRIYA\SQL2022" -Q"exec dbatest.dbo.PopulateTempTable" -n50 -r1000 -q
 */
+
+
+
+
+
+
+
+
+
 
 --TAKEAWAY
 --Resource Pool results in OUT OF MEMORY errors if max memory is reached 

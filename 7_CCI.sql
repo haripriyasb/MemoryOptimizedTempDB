@@ -1,3 +1,6 @@
+
+
+
 /*
 COLUMNSTORE CLUSTERED INDEX ON TEMP TABLE
 */
@@ -9,7 +12,7 @@ AS
 BEGIN  
     SET NOCOUNT ON;  
 
-    -- Create a temporary table with a clustered columnstore index  
+    -- Create temp table with a clustered columnstore index  
     CREATE TABLE #TempColumnstore  
     (  
         ID INT NOT NULL,  
@@ -27,13 +30,23 @@ BEGIN
     SELECT * FROM #TempColumnstore;  
 END;
 
+
+
+
+
+
+
+
+
+
 --Execute Stored procedure
 EXEC dbo.TempTableWithColumnstore
 GO
 
 
 /* 
-TAKEAWAY: CREATING SP WITH COLUMNSTORE CLUSTERED INDEX IS NOT A PROBLEM, BUT EXECUTING IT IS*/
+TAKEAWAY: CREATING SP WITH COLUMNSTORE CLUSTERED INDEX IS NOT A PROBLEM, BUT EXECUTING IT IS
+*/
 
 
 
